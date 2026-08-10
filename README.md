@@ -1,118 +1,112 @@
-# 📓 YangNBLM_bot (lm-bot) — Google NotebookLM Telegram Bot Assistant / Telegram 智能助理
+# 📓 YangNBLM_bot (lm-bot) — Google NotebookLM Telegram 智能助理
 
-[繁體中文 Traditional Chinese] | [English]
+🌐 **Language / 語言**: **[ 繁體中文 | [English](README_EN.md) ]**
 
 `YangNBLM_bot` 是一個以 Python 打造的 Telegram 前端 Bot 服務，將 **Google NotebookLM (Gemini Notebook)** 的強大知識庫、AI 提問、來源管理以及 Studio 製品生成功能完整串接至 Telegram 介面。
 
-`YangNBLM_bot` is a Python-powered Telegram bot frontend that integrates **Google NotebookLM (Gemini Notebook)**'s core capabilities—grounded AI Q&A, source ingestion, web research, and Studio artifact generation—directly into your Telegram client.
-
 本專案支援 **多用戶對話隔離**、**免指令直接提問**、**一鍵觸發 9 種 Studio 製品生成與檔名推送**、**自動化網路研究 (Fast / Deep Research)** 以及 **權限白名單機制**。
 
-Features include **multi-chat isolation**, **commandless Q&A**, **one-tap Studio artifact generation for 9 formats**, **automated web research (Fast/Deep)**, and **allowlist security controls**.
-
 ---
 
-## 📚 引用外部專案與技術棧 / Dependencies & Tech Stack
+## 📚 引用外部專案與技術棧 (Dependencies & Tech Stack)
 
-### 引用外部專案 / External Repository Reference
+### 引用外部專案
 本專案的核心 backend 引擎基於 GitHub 開源專案：
-The core backend engine of this project relies on the open-source GitHub repository:
-* **[teng-lin/notebooklm-py](https://github.com/teng-lin/notebooklm-py)**：Google Gemini Notebook 的非官方 Python API & CLI 工具。 / Unofficial Python API & CLI tool for Google Gemini Notebook.
-* **介面整合方式 / Integration Method**：本專案透過 `/home/ubuntu/.local/bin/nblm` 腳本全域呼叫 `notebooklm-py` CLI，將 API 操作包裝為非同步 subprocess 呼叫，實現與 NotebookLM 伺服器端的溝通。 / This bot invokes the `notebooklm-py` CLI via a global wrapper script (`nblm`), converting API calls into asynchronous subprocess execution to interact with Google's NotebookLM servers.
+* **[teng-lin/notebooklm-py](https://github.com/teng-lin/notebooklm-py)**：Google Gemini Notebook 的非官方 Python API & CLI 工具。
+* **介面整合方式**：本專案透過 `/home/ubuntu/.local/bin/nblm` 腳本全域呼叫 `notebooklm-py` CLI，將 API 操作包裝為非同步 subprocess 呼叫，實現與 NotebookLM 伺服器端的溝通。
 
-### 技術棧 / Tech Stack
+### 技術棧 (Tech Stack)
 1. **Core Language & Runtime**: Python 3.10+
 2. **Telegram Framework**: `python-telegram-bot` (v20+ Async Framework)
-3. **Database**: SQLite3 (使用 Python 原生 `sqlite3` 與 thread locking 機制 / Built-in `sqlite3` with thread locking)
+3. **Database**: SQLite3 (使用 Python 原生 `sqlite3` 與 thread locking 機制)
 4. **Environment & Process Management**: `uv` (Fast Python package installer and resolver)
-5. **Subprocess Management**: Python `asyncio.subprocess` (處理 CLI 命令執行與逾時控制 / Asynchronous CLI execution and timeout management)
+5. **Subprocess Management**: Python `asyncio.subprocess` (處理 CLI 命令執行與逾時控制)
 
 ---
 
-## 🔑 NotebookLM 的登入與認證機制 / Authentication Mechanism
+## 🔑 NotebookLM 的登入與認證機制 (Authentication)
 
 Google NotebookLM 官方目前**未提供公開的 OAuth API 介面**，因此底層 `notebooklm-py` 是採用模擬真實瀏覽器取得的 **Google Session Cookies** 進行身份驗證。
 
-Google NotebookLM does **not provide an official public OAuth API**. Therefore, `notebooklm-py` authenticates using **Google Session Cookies** extracted from real browser sessions.
-
-### 驗證原理 / Authentication Concept
+### 驗證原理
 驗證依賴於 Google 帳號的 Cookie 組合（包含 `SID`, `HSID`, `SSID`, `APISID`, `SAPISID`, `__Secure-1PSID`, `__Secure-1PSIDTS` 等）。其中 `__Secure-1PSIDTS` 的有效期限較短（約 600 秒刷新一次），`notebooklm-py` 內部會自動處理 Cookie 旋轉 (L1 RotateCookies POST)。
 
-Authentication relies on Google session cookies (`SID`, `__Secure-1PSID`, `__Secure-1PSIDTS`, etc.). `notebooklm-py` manages Cookie rotation (L1 RotateCookies POST) automatically.
+### 登入與認證設定方式
 
-### 登入與認證設定方式 / Authentication Setup Methods
-
-#### 1. 互動式 CLI 登入 / Interactive CLI Login (`notebooklm login`)
-在伺服器端或本地終端機執行： / Run on the server or local terminal:
+#### 1. 互動式 CLI 登入 (`notebooklm login`)
+在伺服器端或本地終端機執行：
 ```bash
 notebooklm login
 ```
-* **運作機制 / Mechanism**：首次執行會自動下載 Playwright Chromium 瀏覽器（約 170MB），並彈出瀏覽器畫面引導使用者登入 Google 帳號。登入完成後，驗證 Cookie 會自動儲存至 `~/.notebooklm/storage_state.json`。 / Launches a headless Playwright Chromium browser (~170MB) to guide Google login and saves credentials to `~/.notebooklm/storage_state.json`.
+* **運作機制**：首次執行會自動下載 Playwright Chromium 瀏覽器（約 170MB），並彈出瀏覽器畫面引導使用者登入 Google 帳號。登入完成後，驗證 Cookie 會自動儲存至 `~/.notebooklm/storage_state.json`。
 
-#### 2. Cookie 匯入 / Cookie Import (`notebooklm auth import`)
-無頭伺服器 (Headless Server) 或遠端環境可以透過匯入已有 Cookie 進行驗證： / Import existing cookies on headless or remote environments:
+#### 2. Cookie 匯入 / 瀏覽器擴充功能 (`notebooklm auth import`)
+無頭伺服器 (Headless Server) 或遠端環境可以透過匯入已有 Cookie 進行驗證：
 ```bash
 notebooklm auth import /path/to/cookies.json
 ```
 
-#### 3. 自動刷新與持久化認證 / Master-Token Automatic Refresh (L4 Master-Token Re-mint)
+#### 3. 自動刷新與持久化認證 (L4 Master-Token Re-mint)
 為了確保 Bot 長期運作不中斷，`notebooklm-py` 支援 L4 Master Token 重新簽發機制（Master-token re-mint）。即便 Cookie 暫時過期，內部也能在背景自動向 Google 重新取得無頭驗證憑證，無需人工介入重新登入。
 
-Supports L4 master-token re-minting to automatically renew expired session cookies without manual intervention for long-running headless bots.
-
-#### 4. 驗證狀態檢查 / Status Verification
-在專案中可隨時透過 CLI 檢查驗證狀態： / Check authentication status anytime via CLI:
+#### 4. 驗證狀態檢查
+在專案中可隨時透過 CLI 檢查驗證狀態：
 ```bash
 notebooklm auth check --test --json
 ```
 
 ---
 
-## ⚙️ 系統架構與工作流程 / Architecture & Workflow
+## ⚙️ 系統架構與工作流程 (Architecture & Workflow)
 
 ```mermaid
 flowchart TD
     User([Telegram User]) <--> TG[Telegram Bot API]
-    TG <--> Gatekeeper[Gatekeeper 權限過濾 / Security Filter]
-    Gatekeeper <--> Bot[bot.py 主程式 / Main Application]
+    TG <--> Gatekeeper[Gatekeeper 權限過濾]
+    Gatekeeper <--> Bot[bot.py 主程式]
     
     Bot <--> StateDB[(SQLite state.db)]
-    Bot <--> Catalog[catalog.py 參數解析 / Parameter Parser]
-    Bot <--> Client[nblm_client.py CLI 封裝 / Wrapper]
+    Bot <--> Catalog[catalog.py 參數解析]
+    Bot <--> Client[nblm_client.py CLI 封裝]
     
     Client <--> NBLM_CLI[nblm CLI / notebooklm-py]
     NBLM_CLI <--> Google[Google NotebookLM Server]
     
-    Bot --> JobQueue[JobQueue 背景輪詢器 / Background Poller]
+    Bot --> JobQueue[JobQueue 背景輪詢器]
     JobQueue --> StateDB
     JobQueue --> Client
 ```
 
-### 關鍵運作流程 / Core Workflow Steps:
-1. **白名單與自動綁定 / Allowlist Gatekeeper**:
-   `TypeHandler` (group -1) filters updates via `gatekeeper()`. Unlisted users are blocked. If `ALLOWED_CHAT_IDS` is empty, the first interacting user is auto-bound as owner.
-2. **Chat 狀態隔離 / Per-chat State Isolation**:
-   Each Telegram chat maintains its own active notebook ID & conversation context in SQLite (`state.db`), preventing multi-user conflicts.
-3. **免指令提問 / Commandless Q&A**:
-   Sending plain text automatically queries the active notebook (`nblm.ask()`) and returns cited Markdown answers.
-4. **Studio 製品生成與 Polling / Studio Artifact Generation & Async Polling**:
-   Generates 9 artifact kinds via `nblm.generate()`. Sync artifacts (mind maps) deliver immediately; async artifacts (MP3 podcasts, MP4 videos, PDF slides) queue in SQLite and poll every 45s until ready for delivery.
+### 關鍵運作流程：
+1. **白名單與自動綁定 (Gatekeeper)**：
+   訊息抵達時，`TypeHandler` (group -1) 優先進入 `gatekeeper()`。若設定了 `ALLOWED_CHAT_IDS`，非白名單用戶將被拒絕。若白名單為空且 `ALLOW_FIRST_USER=True`，首位與 Bot 互動的使用者將自動綁定並寫回 `.env`。
+2. **Chat 狀態隔離 (State Storage)**：
+   每個 Telegram Chat 有獨立的作用中筆記本 (Active Notebook ID) 與對話追問脈絡 (Conversation ID)，儲存於 `state.db`，確保不同 Chat 或 concurrent 使用者不會互相干擾。
+3. **免指令提問 (Commandless Q&A)**：
+   使用者發送一般文字時，`on_text()` 判斷若非指令且非加入來源模式，會自動向作用中筆記本發起提問 (`nblm.ask()`)，並回傳附帶引用資料的回答。
+4. **一鍵 Studio 製品生成與非同步輪詢 (Async Generation & Polling)**：
+   - 使用者透過控制面板或指令 (如 `/audio`, `/slides`, `/infographic`) 請求生成。
+   - `start_generation()` 呼叫 `nblm.generate()`。
+   - 同步製品 (如心智圖 `mindmap`)：立即取得 JSON 並產生文字大綱推送至 Chat。
+   - 非同步製品 (如語音 MP3、影片 MP4、簡報 PDF)：將任務寫入 SQLite `jobs` 資料表，由 `poll_jobs()` 每 45 秒背景輪詢。任務完成 (status=`completed`) 後自動呼叫 `deliver()` 將檔案下載至 `downloads/` 並推送回 Telegram Chat。
 
 ---
 
-### 🧩 細項功能模組流程圖 / Detailed Functional Flowcharts
+### 🧩 細項功能模組流程圖 (Detailed Functional Flowcharts)
 
-#### 1. 免指令對話與追問脈絡資訊流 / Commandless Q&A Flowchart
+#### 1. 免指令對話與追問脈絡資訊流 (Commandless Q&A Flowchart)
+
+說明使用者發送純文字時，系統如何判定、提取對話脈絡、向 NotebookLM 提問並分段編輯傳送回 Telegram 的過程：
 
 ```mermaid
 flowchart TD
-    Start([使用者傳送純文字/指令 / User sends text]) --> TextHandler[bot.py: on_text]
-    TextHandler --> ModeCheck{是否處於來源模式<br>或裸網址？ / Is URL or Ingestion Mode?}
+    Start([使用者傳送純文字/指令]) --> TextHandler[bot.py: on_text]
+    TextHandler --> ModeCheck{是否處於來源模式<br>或裸網址？}
     
-    ModeCheck -- 是 / Yes --> IngestSource[觸發來源吸收 / Trigger ingest_text_source]
-    ModeCheck -- 否 / No --> DoAsk[bot.py: do_ask]
+    ModeCheck -- 是 (網址/檔案) --> IngestSource[觸發來源吸收 ingest_text_source]
+    ModeCheck -- 否 (一般問題) --> DoAsk[bot.py: do_ask]
     
-    DoAsk --> QueryState[state.get_active: 查詢 active notebook_id & conversation_id]
+    DoAsk --> QueryState[state.get_active: 查詢 SQLite active notebook_id & conversation_id]
     QueryState --> NblmAsk[nblm_client.py: ask]
     NblmAsk --> SubprocAsk[執行 nblm ask '問題' -n id -c conv_id]
     SubprocAsk --> GoogleRPC[Google NotebookLM Server]
@@ -121,58 +115,62 @@ flowchart TD
     Resp --> UpdateState[state.set_conversation: 更新追問脈絡]
     Resp --> FormatHTML[bot.py: md_to_html 轉為 Telegram HTML 格式]
     FormatHTML --> SendLong[bot.py: send_long 分段發送至 Telegram Chat]
-    SendLong --> EndQ([完成對話推送 / Complete Delivery])
+    SendLong --> EndQ([完成對話推送])
 ```
 
-#### 2. 一鍵 Studio 製品生成與背景 Polling 資訊流 / Studio Artifact Generation & Poller Flowchart
+#### 2. 一鍵 Studio 製品生成與背景 Polling 資訊流 (Artifact Generation & Poller Flowchart)
+
+說明非同步製品（語音 MP3、影片 MP4、簡報 PDF 等）從按鈕觸發、CLI 請求、SQLite 任務入隊到 JobQueue 背景輪詢推送的完整生命週期：
 
 ```mermaid
 flowchart TD
-    UserClick([用戶點擊按鈕或輸入指令 / User triggers /slides or button]) --> GenStart[bot.py: start_generation]
-    GenStart --> ParseCatalog[catalog.py: parse_params 解析語言與風格]
+    UserClick([用戶點擊面板按鈕 /gen:audio 或輸入 /slides]) --> GenStart[bot.py: start_generation]
+    GenStart --> ParseCatalog[catalog.py: parse_params 解析語言/風格/格式]
     ParseCatalog --> NblmGen[nblm_client.py: generate]
     NblmGen --> ExecGen[執行 nblm generate kind instructions --json]
     ExecGen --> GoogleGen[Google Server 啟動 Studio 生成任務]
     
     GoogleGen --> GenResp[回傳 JSON 任務資訊]
-    GenResp --> IsSync{是否為同步製品<br>mind-map？ / Is Sync Payload?}
+    GenResp --> IsSync{是否為同步製品<br>mind-map？}
     
-    IsSync -- 是 / Yes --> DeliverSync[bot.py: _deliver_sync 解析大綱並即時傳送 JSON]
-    IsSync -- 否 / No --> ExtractID[nblm_client.py: extract_artifact_id 挖出 artifact_id]
+    IsSync -- 是 (心智圖) --> DeliverSync[bot.py: _deliver_sync 解析大綱並即時傳送 JSON]
+    IsSync -- 否 (非同步製品) --> ExtractID[nblm_client.py: extract_artifact_id 挖出 artifact_id]
     
     ExtractID --> AddJobDB[state.add_job: 寫入 SQLite jobs 資料表 status=pending]
     AddJobDB --> FastPoll[JobQueue 觸發 5s 後 poll_once 單次輪詢]
     
-    subgraph Background_Poller ["JobQueue 定期輪詢器 (每 45 秒) / Background Poller (every 45s)"]
+    subgraph Background_Poller ["JobQueue 定期輪詢器 (每 45 秒)"]
         PollerLoop[bot.py: poll_jobs] --> GetPending[state.pending_jobs: 讀取未完成任務]
         GetPending --> CheckStatus[nblm_client.py: artifact_status 查詢進度]
         CheckStatus --> SubprocStatus[執行 nblm artifact list -n notebook_id]
         SubprocStatus --> StatusCheck{"status == 'completed' ?"}
     end
     
-    StatusCheck -- 尚未完成 / in_progress --> KeepPending[保持 done=0 待下次輪詢]
-    StatusCheck -- 超時 / >1hr Timeout --> TimeoutJob[state.finish_job 標記 timeout 並發送通知]
-    StatusCheck -- 已完成 / completed --> FinishJob[state.finish_job 標記 done=1]
+    StatusCheck -- 尚未完成 (in_progress) --> KeepPending[保持 done=0 待下次輪詢]
+    StatusCheck -- 超時 >1hr --> TimeoutJob[state.finish_job 標記 timeout 並發送通知]
+    StatusCheck -- 已完成 (completed) --> FinishJob[state.finish_job 標記 done=1]
     
     FinishJob --> Deliver[bot.py: deliver 執行 nblm download 下載檔案至 downloads/]
     Deliver --> SendMedia{根據副檔名選用<br>Telegram API}
     SendMedia -- .mp3 --> SendAudio[bot.send_audio]
     SendMedia -- .mp4 --> SendVideo[bot.send_video]
     SendMedia -- .png --> SendPhoto[bot.send_photo]
-    SendMedia -- 其他 / others --> SendDoc[bot.send_document]
+    SendMedia -- 其他 --> SendDoc[bot.send_document]
     
     SendAudio & SendVideo & SendPhoto & SendDoc --> UpdateMsg[更新原進度訊息為 ✅ 生成完成]
 ```
 
-#### 3. 來源吸收與網路研究資訊流 / Source Ingestion & Web Research Flowchart
+#### 3. 來源吸收與網路研究資訊流 (Source Ingestion & Web Research Flowchart)
+
+說明網址、上傳檔案 (PDF/Word/音訊) 以及快速/深度網路研究 (Research Agent) 如何進入系統並完成索引：
 
 ```mermaid
 flowchart TD
-    Input([來源輸入途徑 / Input Source]) --> Route{輸入類型判定 / Type Route}
+    Input([來源輸入途徑]) --> Route{輸入類型判定}
     
-    Route -- 貼網址 / URLs --> TextIngest[bot.py: ingest_text_source]
-    Route -- 上傳檔案 ≤20MB / Files --> DocHandler[bot.py: on_document]
-    Route -- 網路研究 / Web Research --> ResearchHandler[bot.py: do_research]
+    Route -- 貼網址 / YouTube --> TextIngest[bot.py: ingest_text_source]
+    Route -- 上傳檔案 ≤20MB --> DocHandler[bot.py: on_document]
+    Route -- 網路研究 /research --> ResearchHandler[bot.py: do_research]
     
     DocHandler --> TGDownload[ctx.bot.get_file 下載檔案至 uploads/ 目錄]
     TGDownload --> AddFileSource["nblm_client.py: add_source (type_='file')"]
@@ -189,57 +187,52 @@ flowchart TD
 
 ---
 
-## 📁 程式碼檔案與 Function 詳細說明 / Codebase Reference
+## 📁 程式碼檔案用途與 Function 作用詳細說明
 
-專案由 4 個核心 Python 程式碼檔案組成： / The codebase consists of 4 core Python modules:
+專案由 4 個主要 Python 程式碼檔案組成：
 
-### 1. `bot.py` — Telegram Bot 主程式與控制邏輯 / Main Bot Logic & Handlers
-* **`main()`**: Bot 主入口，載入環境變數、初始化 SQLite、設定 Telegram `Application`Handlers 與背景 `JobQueue`。 / Application entry point; initializes DB, Handlers, and `JobQueue`.
-* **`gatekeeper(update, ctx)`**: 第一層白名單權限過濾器 (group -1)。 / Security filter (group -1) blocking unauthorized Telegram users.
-* **`authorized(update)`**: 檢查 User/Chat ID 是否在白名單內，支援首位使用者 Auto-bind。 / Checks whitelist and handles first-user auto-binding.
-* **`cmd_notebooks()`, `cmd_panel()`, `cmd_sources()`, `cmd_artifacts()`, `cmd_new()`**: 控制面板與清單選單命令處理器。 / Command handlers for panels, sources, artifacts, and resetting session context.
-* **`on_text(update, ctx)`**: 實現「免指令提問」與裸網址自動吸收。 / Handles commandless text Q&A and auto URL ingestion.
-* **`do_ask(update, ctx, question)`**: 執行 NotebookLM 提問、維持追問 ID 並切分推送回答。 / Executes Q&A queries, retains conversation IDs, and sends long responses.
-* **`on_document(update, ctx)`**: 下載用戶傳送的檔案 (≤20MB) 並加入筆記本來源。 / Downloads user-uploaded files and ingests them into the notebook.
-* **`start_generation()`, `deliver()`**: 發起 Studio 製品生成，由 `poll_jobs()` 定時輪詢並推送完成檔案。 / Triggers artifact generation and handles file download & delivery.
+### 1. `bot.py` — Telegram Bot 主程式與控制邏輯
+* `load_env()`, `_parse_allowlist()`, `_persist_allowlist()`, `main()`, `post_init()`: Bot 初始化與配置管理。
+* `authorized()`, `gatekeeper()`: 權限檢查與白名單過濾。
+* `esc()`, `md_to_html()`, `send_long()`, `panel_markup()`, `more_markup()`, `addsrc_markup()`: 格式化與 UI 選單。
+* `cmd_start()`, `cmd_help()`, `cmd_notebooks()`, `cmd_panel()`, `cmd_sources()`, `cmd_artifacts()`, `cmd_new()`, `cmd_ask()`, `do_ask()`, `cmd_addsource()`, `cmd_newnotebook()`, `cmd_research()`, `cmd_deepresearch()`: 指令處理器。
+* `on_text()`, `ingest_text_source()`, `do_research()`, `on_document()`, `on_callback()`: 訊息與事件監聽器。
+* `start_generation()`, `_deliver_sync()`, `_mindmap_outline()`, `deliver()`, `_kind_from_type()`: 製品生成與傳送交付。
+* `poll_once()`, `poll_jobs()`, `_check_job_by_id()`: 背景輪詢器。
 
-### 2. `nblm_client.py` — NotebookLM CLI 非同步封裝庫 / CLI Wrapper Module
-* **`_run(args, timeout)`**: 核心非同步 subprocess 執行器，負責執行 `nblm` 並管理逾時。 / Executes `nblm` CLI commands via `asyncio.subprocess`.
-* **`_friendly_error(stderr)`**: 將 CLI 底層錯誤轉譯為使用者友善的中文提示。 / Translates CLI errors into user-friendly diagnostic messages.
-* **`list_notebooks()`, `list_sources()`, `create_notebook()`, `add_source()`, `add_research()`**: 筆記本與來源 CRUD 命令 API 封裝。 / Wrapper functions for notebook and source management.
-* **`ask()`, `generate()`, `list_artifacts()`, `download()`, `auth_ok()`**: 問答、製品生成、下載與認證測試介面。 / API interfaces for Q&A, artifact generation, downloading, and auth checks.
+### 2. `nblm_client.py` — NotebookLM CLI (`nblm`) 非同步封裝庫
+* `NblmError`, `Artifact`, `_run()`, `_friendly_error()`, `_parse_json()`: 子行程執行器與錯誤解析。
+* `list_notebooks()`, `list_sources()`, `create_notebook()`, `add_source()`, `add_research()`, `delete_source()`, `source_status()`: 筆記本與來源操作。
+* `ask()`, `generate()`, `extract_artifact_id()`, `is_sync_payload()`, `list_artifacts()`, `artifact_status()`, `download()`, `auth_ok()`: AI 提問、生成、下載與驗證。
 
-### 3. `catalog.py` — 製品種類與參數解析器 / Artifact Catalog & Parameter Parser
-* **`CATALOG`**: 映射 9 種 Studio 製品（語音、簡報、資訊圖表、心智圖、報告、測驗、學習卡、資料表、影片）之細節設定。 / Maps configuration for 9 Studio artifact kinds.
-* **`parse_params(kind, text)`**: 將自由文字拆解為 `nblm` 選項（自動識別多語言 `zh_Hant`、手繪/專業風格與圖片方向）。 / Parses free text into `nblm` flags (languages, styles, orientation).
+### 3. `catalog.py` — 製品種類、風格與語言參數解析器
+* `CATALOG`, `PRIMARY`, `SECONDARY`, `EMOJI`: 製品對照表與顯示分類。
+* `LANGUAGES`, `INFOGRAPHIC_STYLES`, `VIDEO_STYLES`, `ORIENTATIONS`, `AUDIO_FORMATS`, `REPORT_FORMATS`, `DIFFICULTY`: 多語言與風格字典。
+* `parse_params()`: 輸入文字與選項解析。
 
-### 4. `state.py` — SQLite 狀態管理庫 / SQLite State Manager
-* **`init()`**: 建立 `chat_state` 與 `jobs` 資料表。 / Initializes SQLite tables (`chat_state`, `jobs`).
-* **`set_active()`, `get_active()`, `set_conversation()`**: 管理特定 Chat 的作用中筆記本與對話上下文。 / Manages per-chat active notebooks and conversation IDs.
-* **`add_job()`, `pending_jobs()`, `finish_job()`**: 非同步生成任務佇列 CRUD 操作。 / Manages async generation job queue for background polling.
-
----
-
-## 🔒 權限白名單與 Telegram ID / Allowlist & Telegram ID Guide
-
-### 1. 取得 Telegram User ID / How to get your Telegram User ID
-* **方法 / Method**: 在 Telegram 搜尋並傳送訊息給 `@userinfobot` 或 `@raw_data_bot` 即可取得一串數字 ID（例如 `7030555903`）。 / Message `@userinfobot` on Telegram to get your numerical user ID.
-
-### 2. 白名單增加步驟 / How to add to Allowlist
-1. 編輯 [.env](file:///home/ubuntu/lm-bot/.env) 檔案： / Edit the `.env` file:
-   ```env
-   ALLOWED_CHAT_IDS=7030555903,123456789
-   ```
-2. 重新啟動 Bot 服務。 / Restart the bot service.
+### 4. `state.py` — SQLite 本地狀態管理庫
+* `_conn()`, `init()`: 資料庫初始化。
+* `set_active()`, `get_active()`, `clear_active()`, `set_conversation()`: Chat 狀態與對話 ID 管理。
+* `add_job()`, `pending_jobs()`, `finish_job()`: 任務佇列管理。
 
 ---
 
-## ⚖️ 合法性、風險與注意事項 / Legality, Risks & Disclaimer
+## 🔒 權限白名單設定與 Telegram ID 取得指南
 
-1. **合法性 / Legality**:
-   `notebooklm-py` 是由社群開發的非官方逆向封裝庫。個人學習、研究與知識庫自動化**並不違法**。 / `notebooklm-py` is an unofficial open-source library. Personal research and self-use do not violate laws.
-2. **技術風險 / Technical Risks**:
-   * **API 變更 / Breaking Changes**: Google 隨時可能修改 RPC 端點，需定期更新 `notebooklm-py`。 / Google internal APIs may change anytime; update library via `uv tool upgrade notebooklm-py`.
-   * **限流 / Rate Limiting**: 短時間高頻提問可能觸發 Rate Limit，冷卻 5~15 分鐘即可恢復。 / Heavy usage may cause temporary rate limits.
-3. **合規建議 / Compliance**:
-   請勿用於商業轉售 (Reselling) 或高頻惡意爬取；僅建議於個人或小團隊內部私人存取。 / Do not use for commercial reselling or abusive scraping.
+### 1. 如何取得您的 Telegram User ID？
+* **使用 Telegram 機器人查詢**：發送訊息給 `@userinfobot` 即可取得一串數字 ID（例如 `7030555903`）。
+* **首位使用者自動綁定**：若 `.env` 中的 `ALLOWED_CHAT_IDS=` 留空，第一個發送訊息給 Bot 的使用者會被自動綁定。
+
+### 2. 增加白名單的實際操作步驟
+編輯 `.env` 檔案中的 `ALLOWED_CHAT_IDS=`，多個 ID 以逗號分隔：
+```env
+ALLOWED_CHAT_IDS=7030555903,123456789
+```
+
+---
+
+## ⚖️ 關於 `notebooklm-py` 的合法性、風險與法律問題
+
+1. **合法性**：`notebooklm-py` 為非官方社群開源庫。個人學習、研究與個人知識庫自動化並不違法。
+2. **風險**：Google 隨時可能修改 RPC 端點（更新庫即可修復）；高頻請求可能觸發 Rate Limit 限流。
+3. **合規建議**：勿用於商業付費轉售或高頻惡意爬取，適合個人或小團隊內部私人使用。
