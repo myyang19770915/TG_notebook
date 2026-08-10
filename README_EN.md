@@ -206,6 +206,58 @@ The codebase consists of 4 core Python modules:
 * `set_active()`, `get_active()`, `clear_active()`, `set_conversation()`: Chat state and conversation ID manager.
 * `add_job()`, `pending_jobs()`, `finish_job()`: Async generation job queue manager.
 
+## 🚀 How to Run & Telegram Integration
+
+### 1. How to Start the Project?
+
+#### Step 1: Configure Environment Variables (.env)
+Create or confirm your `.env` file in the root directory (refer to `.env.example`):
+```env
+TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+ALLOWED_CHAT_IDS=YOUR_TELEGRAM_ID
+```
+
+#### Step 2: Verify NotebookLM CLI Auth Status
+Ensure `nblm` authentication is active on your server:
+```bash
+/home/ubuntu/.local/bin/nblm auth check
+```
+*(If authentication has expired, run `notebooklm login` on the server to re-authenticate)*
+
+#### Step 3: Run the Bot Service
+Execute the main application [`bot.py`](file:///home/ubuntu/lm-bot/bot.py):
+* **Direct Execution**:
+  ```bash
+  python3 bot.py
+  # Or using virtualenv
+  /home/ubuntu/lm-bot/.venv/bin/python3 bot.py
+  ```
+* **Run in Background**:
+  ```bash
+  nohup python3 bot.py > bot.log 2>&1 &
+  ```
+
+---
+
+### 2. Main Telegram Integration Module
+
+All core integration logic and Telegram API event listeners are centralized in **[`bot.py`](file:///home/ubuntu/lm-bot/bot.py)**.
+
+#### Core Integration Highlights:
+1. **Telegram Listener Loop (bot.py L992 ~ L1037)**:
+   In `main()`, `python-telegram-bot`'s `Application.builder()` loads the Token and starts long-polling via `app.run_polling()`.
+2. **Handlers Registration (bot.py L1008 ~ L1032)**:
+   * `TypeHandler(Update, gatekeeper)`: Allowlist security filter (group -1).
+   * `CommandHandler`: Handles commands like `/start`, `/notebooks`, `/panel`, `/ask`, `/research`.
+   * `CallbackQueryHandler(on_callback)`: Handles Inline Keyboard panel button clicks.
+   * `MessageHandler(filters.Document..., on_document)`: Receives uploaded files (≤20MB).
+   * `MessageHandler(filters.TEXT..., on_text)`: Enables commandless text Q&A and auto URL ingestion.
+3. **Telegram API Calls**:
+   * Text & Markdown sending: `reply_text()`, `send_long()`
+   * Typing action: `ctx.bot.send_chat_action(chat_id, ChatAction.TYPING)`
+   * Media pushing: `send_audio()`, `send_video()`, `send_photo()`, `send_document()`
+   * File downloading: `ctx.bot.get_file()` and `download_to_drive()`
+
 ---
 
 ## 🔒 Security Allowlist & Telegram ID Guide
@@ -229,3 +281,4 @@ ALLOWED_CHAT_IDS=7030555903,123456789
    * **Breaking Changes**: Google internal RPC APIs may change; update the library via `uv tool upgrade notebooklm-py`.
    * **Rate Limits**: Heavy automated queries may cause temporary rate limits (~5-15 min cooldown).
 3. **Compliance Advice**: Do not use for commercial reselling or abusive automated scraping. Intended for personal or small team internal use.
+

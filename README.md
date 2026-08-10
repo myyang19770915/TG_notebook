@@ -215,6 +215,58 @@ flowchart TD
 * `set_active()`, `get_active()`, `clear_active()`, `set_conversation()`: Chat 狀態與對話 ID 管理。
 * `add_job()`, `pending_jobs()`, `finish_job()`: 任務佇列管理。
 
+## 🚀 專案啟動與 Telegram 串接說明 (How to Run & Integration)
+
+### 1. 專案該如何啟動？ (Startup Steps)
+
+#### 步驟一：確認環境變數 (.env)
+在專案根目錄確認或建立 `.env` 檔案（可參考 `.env.example`）：
+```env
+TELEGRAM_BOT_TOKEN=您的_TELEGRAM_BOT_TOKEN
+ALLOWED_CHAT_IDS=您的_TELEGRAM_ID
+```
+
+#### 步驟二：檢查底層 NotebookLM CLI 認證
+確保伺服器上的 `nblm` 驗證狀態正常：
+```bash
+/home/ubuntu/.local/bin/nblm auth check
+```
+*(若認證失效，請在伺服器上執行 `notebooklm login` 完成 Google 登入)*
+
+#### 步驟三：啟動 Bot 服務
+在專案目錄下執行主程式 [`bot.py`](file:///home/ubuntu/lm-bot/bot.py)：
+* **前台直接啟動 (Direct Run)**：
+  ```bash
+  python3 bot.py
+  # 或使用虛擬環境
+  /home/ubuntu/lm-bot/.venv/bin/python3 bot.py
+  ```
+* **背景常駐啟動 (Run in Background)**：
+  ```bash
+  nohup python3 bot.py > bot.log 2>&1 &
+  ```
+
+---
+
+### 2. 與 Telegram 串接的主要程式在哪邊？
+
+本專案與 Telegram 串接的所有核心邏輯與 API 監聽，全部集中在 **[`bot.py`](file:///home/ubuntu/lm-bot/bot.py)** 中。
+
+#### 核心串接區塊說明：
+1. **Telegram 監聽迴圈 (bot.py L992 ~ L1037)**：
+   在 `main()` 中使用 `python-telegram-bot` 的 `Application.builder()` 載入 Token，並透過 `app.run_polling()` 開啟長輪詢監聽。
+2. **Handlers 註冊 (bot.py L1008 ~ L1032)**：
+   * `TypeHandler(Update, gatekeeper)`: 權限白名單過濾閘門 (group -1)。
+   * `CommandHandler`: 處理 `/start`, `/notebooks`, `/panel`, `/ask`, `/research` 等指令。
+   * `CallbackQueryHandler(on_callback)`: 處理 Inline Keyboard 控制面板按鈕點擊。
+   * `MessageHandler(filters.Document..., on_document)`: 接收用戶在聊天室上傳的檔案 (≤20MB)。
+   * `MessageHandler(filters.TEXT..., on_text)`: 實現免指令對話與網址自動吸收。
+3. **Telegram API 方法呼叫**：
+   * 文字與 Markdown 發送：`reply_text()`, `send_long()`
+   * 打字狀態：`ctx.bot.send_chat_action(chat_id, ChatAction.TYPING)`
+   * 多媒體主動推送：`send_audio()`, `send_video()`, `send_photo()`, `send_document()`
+   * 檔案下載接收：`ctx.bot.get_file()` 與 `download_to_drive()`
+
 ---
 
 ## 🔒 權限白名單設定與 Telegram ID 取得指南
@@ -236,3 +288,4 @@ ALLOWED_CHAT_IDS=7030555903,123456789
 1. **合法性**：`notebooklm-py` 為非官方社群開源庫。個人學習、研究與個人知識庫自動化並不違法。
 2. **風險**：Google 隨時可能修改 RPC 端點（更新庫即可修復）；高頻請求可能觸發 Rate Limit 限流。
 3. **合規建議**：勿用於商業付費轉售或高頻惡意爬取，適合個人或小團隊內部私人使用。
+
